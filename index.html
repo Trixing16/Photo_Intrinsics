@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Intrinsics</title>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<style>
+  :root{
+    --bg:#0f1512;
+    --panel:#161f1a;
+    --panel2:#1b2620;
+    --line:#2a3830;
+    --text:#e6efe9;
+    --muted:#8ba396;
+    --accent:#ff8a3d;
+    --accent-dim:#5c3a20;
+    --good:#5bc98a;
+    --warn:#e0b34a;
+    --bad:#e0605a;
+    --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    min-height:100vh;
+  }
+  header{
+    padding:28px 32px 20px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  header h1{
+    margin:0;
+    font-size:1.4rem;
+    letter-spacing:0.01em;
+    font-weight:600;
+  }
+  header h1 span{color:var(--accent);}
+  header p{margin:6px 0 0; color:var(--muted); font-size:0.88rem; max-width:560px;}
+  .top-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+
+  .btn{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:6px;
+    font-size:0.85rem;
+    cursor:pointer;
+    font-weight:500;
+    transition:border-color .15s, background .15s;
+  }
+  .btn:hover{border-color:var(--accent); background:#20291f;}
+  .btn.primary{background:var(--accent); color:#1a1006; border-color:var(--accent); font-weight:600;}
+  .btn.primary:hover{background:#ff9a55;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+  input[type=file]{display:none;}
+
+  main{padding:24px 32px 60px;}
+
+  .empty{
+    margin-top:60px;
+    text-align:center;
+    color:var(--muted);
+    border:1px dashed var(--line);
+    border-radius:10px;
+    padding:60px 20px;
+  }
+  .empty .drop-target{
+    border-radius:10px;
+  }
+  .empty.dragover{border-color:var(--accent); background:rgba(255,138,61,0.04);}
+  .empty svg{opacity:0.5; margin-bottom:10px;}
+
+  .summary-row{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:12px;
+    margin-bottom:22px;
+  }
+  .flight-time-hero{
+    background:linear-gradient(135deg, var(--accent-dim), var(--panel));
+    border:1px solid var(--accent);
+    border-radius:10px;
+    padding:16px 20px;
+    margin-bottom:16px;
+    display:flex;
+    align-items:baseline;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .flight-time-hero .ft-label{
+    font-size:0.75rem;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--accent);
+    font-weight:700;
+  }
+  .flight-time-hero .ft-range{
+    font-family:var(--mono);
+    font-size:1.5rem;
+    font-weight:600;
+    color:var(--text);
+  }
+  .flight-time-hero .ft-duration{
+    font-family:var(--mono);
+    font-size:0.95rem;
+    color:var(--muted);
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .stat .label{font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted);}
+  .stat .value{font-family:var(--mono); font-size:1.25rem; margin-top:4px;}
+  .stat .value.warn{color:var(--warn);}
+  .stat .value.good{color:var(--good);}
+
+  .flag-banner{
+    background:rgba(224,179,74,0.08);
+    border:1px solid rgba(224,179,74,0.35);
+    color:var(--warn);
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:0.85rem;
+    margin-bottom:20px;
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+  }
+
+  .controls{
+    display:flex;
+    gap:10px;
+    margin-bottom:14px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .controls input[type=text]{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:8px 12px;
+    border-radius:6px;
+    font-size:0.85rem;
+    min-width:220px;
+  }
+  .controls select{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:8px 12px;
+    border-radius:6px;
+    font-size:0.85rem;
+  }
+
+  .table-wrap{
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:auto;
+    background:var(--panel);
+  }
+  table{border-collapse:collapse; width:100%; font-size:0.82rem; font-family:var(--mono); min-width:1100px;}
+  thead th{
+    position:sticky; top:0;
+    background:var(--panel2);
+    text-align:left;
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    color:var(--muted);
+    font-weight:600;
+    cursor:pointer;
+    white-space:nowrap;
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  thead th:hover{color:var(--text);}
+  tbody td{
+    padding:9px 12px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody tr:hover{background:var(--panel2);}
+  tbody tr.mismatch td:first-child{box-shadow:inset 3px 0 0 var(--warn);}
+  .filename{color:var(--text); font-weight:500;}
+  .muted{color:var(--muted);}
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:20px;
+    font-size:0.7rem;
+    background:var(--panel2);
+    border:1px solid var(--line);
+  }
+  .pill.rtk-fixed{color:var(--good); border-color:rgba(91,201,138,0.4);}
+  .pill.rtk-other{color:var(--warn); border-color:rgba(224,179,74,0.4);}
+
+  footer{
+    padding:14px 32px 30px;
+    color:var(--muted);
+    font-size:0.78rem;
+    border-top:1px solid var(--line);
+    margin-top:10px;
+  }
+
+  .loading{color:var(--muted); font-size:0.85rem; margin-bottom:14px;}
+  .progress-bar{
+    height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin-top:8px; width:280px;
+  }
+  .progress-fill{height:100%; background:var(--accent); width:0%; transition:width .1s;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Photo <span>Intrinsics</span></h1>
+  </div>
+  <div class="top-actions">
+    <input type="file" id="fileInput" multiple accept="image/*">
+    <input type="file" id="folderInput" webkitdirectory multiple>
+    <button class="btn primary" onclick="document.getElementById('folderInput').click()">Select folder</button>
+    <button class="btn" onclick="document.getElementById('fileInput').click()">Select files</button>
+    <button class="btn" id="exportBtn" disabled onclick="exportCSV()">Export CSV</button>
+    <button class="btn" id="clearBtn" disabled onclick="clearAll()">Clear</button>
+  </div>
+</header>
+
+<main>
+  <div id="emptyState" class="empty">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 15l-5-5-9 9"/></svg>
+    <div>Drop a folder of photos here, or use the buttons above.</div>
+    <div style="margin-top:6px; font-size:0.78rem;">Works with DJI drone imagery (L1/L2/L3/P1, Phantom, Mavic), most consumer/mirrorless cameras, and anything carrying standard EXIF.</div>
+  </div>
+
+  <div id="loadingState" class="loading" style="display:none;">
+    Parsing metadata… <span id="loadCount"></span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <div id="resultsState" style="display:none;">
+    <div id="folderLabel" style="color:var(--muted); font-size:0.8rem; margin-bottom:12px;"></div>
+    <div id="flightTimeHero"></div>
+    <div id="flagBanner"></div>
+    <div class="summary-row" id="summaryRow"></div>
+
+    <div class="controls">
+      <input type="text" id="searchBox" placeholder="Filter by filename or camera model…" oninput="renderTable()">
+      <select id="cameraFilter" onchange="renderTable()"><option value="">All cameras</option></select>
+    </div>
+
+    <div class="table-wrap">
+      <table id="dataTable">
+        <thead>
+          <tr id="tableHead"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const SENSOR_LOOKUP = {
+  // model substring match -> sensor width mm, sensor height mm
+  "L1": {w:13.2, h:8.8, note:"1\" CMOS"},
+  "L2": {w:13.2, h:8.8, note:"1\" CMOS"},
+  "ZH20T": {w:13.2, h:8.8, note:"1\" CMOS"},
+  "P1": {w:35.9, h:24.0, note:"Full-frame"},
+  "FC6310": {w:13.2, h:8.8, note:"1\" CMOS (P4 RTK/Pro)"},
+  "FC3411": {w:17.3, h:13.0, note:"4/3 CMOS (Mavic 3E)"},
+  "FC3582": {w:9.7, h:7.3, note:"1/1.3\" CMOS (Mavic 3M)"},
+  "FC7303": {w:6.3, h:4.7, note:"Mini series"},
+  "FC2103": {w:6.3, h:4.7, note:"Mavic Air"},
+  "FC220": {w:6.3, h:4.7, note:"Mavic Pro"},
+  "FC300": {w:6.3, h:4.7, note:"Phantom 3"},
+  "FC330": {w:6.3, h:4.7, note:"Phantom 4"},
+  "FC6520": {w:17.3, h:13.0, note:"Zenmuse X5"},
+  "FC6540": {w:17.3, h:13.0, note:"Zenmuse X7"},
+};
+
+let records = [];
+let sortState = {key:'file', dir:1};
+let flightPlan = null;
+
+function extractFlightPlan(files) {
+  let candidate = '';
+  for (const f of files) {
+    if (f.webkitRelativePath) { candidate = f.webkitRelativePath; break; }
+  }
+  if (!candidate && files[0]) candidate = files[0].fullPath || files[0].name || '';
+
+  const match = candidate.match(/F(\d{1,3})S(\d{1,3})AGL(\d{1,4})/i);
+  const folderName = candidate.includes('/') ? candidate.split('/').slice(0, -1).join('/') : '';
+
+  return {
+    folderName: folderName || null,
+    frontOverlap: match ? match[1] : null,
+    sideOverlap: match ? match[2] : null,
+    agl: match ? match[3] : null,
+  };
+}
+
+const fileInput = document.getElementById('fileInput');
+const folderInput = document.getElementById('folderInput');
+const emptyState = document.getElementById('emptyState');
+const loadingState = document.getElementById('loadingState');
+const resultsState = document.getElementById('resultsState');
+
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+folderInput.addEventListener('change', e => handleFiles(e.target.files));
+
+emptyState.addEventListener('dragover', e => { e.preventDefault(); emptyState.classList.add('dragover'); });
+emptyState.addEventListener('dragleave', () => emptyState.classList.remove('dragover'));
+emptyState.addEventListener('drop', e => {
+  e.preventDefault();
+  emptyState.classList.remove('dragover');
+  const items = e.dataTransfer.items;
+  const files = [];
+  const promises = [];
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+    if (entry) promises.push(walkEntry(entry, files));
+    else if (item.getAsFile) { const f = item.getAsFile(); if (f) files.push(f); }
+  }
+  Promise.all(promises).then(() => handleFiles(files));
+});
+
+function walkEntry(entry, out) {
+  return new Promise(resolve => {
+    if (entry.isFile) {
+      entry.file(f => { out.push(f); resolve(); });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const readAll = () => reader.readEntries(entries => {
+        if (!entries.length) return resolve();
+        Promise.all(entries.map(e => walkEntry(e, out))).then(readAll);
+      });
+      readAll();
+    } else resolve();
+  });
+}
+
+function toDeg(dms, ref) {
+  if (dms == null) return null;
+  let val = dms;
+  if (ref === 'S' || ref === 'W') val = -Math.abs(val);
+  return val;
+}
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList).filter(f => /\.jpe?g$/i.test(f.name));
+  if (!files.length) { alert('No JPEG files found in that selection.'); return; }
+
+  emptyState.style.display = 'none';
+  resultsState.style.display = 'none';
+  loadingState.style.display = 'block';
+
+  flightPlan = extractFlightPlan(files);
+  records = [];
+  const countEl = document.getElementById('loadCount');
+  const fillEl = document.getElementById('progressFill');
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    countEl.textContent = `${i+1} / ${files.length}`;
+    fillEl.style.width = `${((i+1)/files.length)*100}%`;
+    try {
+      const meta = await exifr.parse(f, { tiff:true, exif:true, gps:true, xmp:true, ifd0:true, ifd1:false });
+      records.push(buildRecord(f, meta || {}));
+    } catch (err) {
+      records.push(buildRecord(f, null, err.message));
+    }
+    // yield to UI every ~15 files
+    if (i % 15 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  loadingState.style.display = 'none';
+  resultsState.style.display = 'block';
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('clearBtn').disabled = false;
+  populateCameraFilter();
+  renderSummary();
+  renderTable();
+}
+
+function buildRecord(file, meta, error) {
+  if (!meta) {
+    return { file: file.name, error: error || 'No metadata found', raw: {} };
+  }
+  const make = meta.Make || '';
+  const model = meta.Model || '';
+  const combinedModel = `${make} ${model}`.trim();
+  const imgW = meta.ExifImageWidth || meta.ImageWidth || meta.PixelXDimension || null;
+  const imgH = meta.ExifImageHeight || meta.ImageHeight || meta.PixelYDimension || null;
+  const focalMM = meta.FocalLength || null;
+  const focal35 = meta.FocalLengthIn35mmFormat || meta.FocalLengthIn35mmFilm || null;
+
+  // sensor width: lookup table first
+  let sensorW = null, sensorH = null, sensorSource = null;
+  for (const key in SENSOR_LOOKUP) {
+    if (model.includes(key)) {
+      sensorW = SENSOR_LOOKUP[key].w;
+      sensorH = SENSOR_LOOKUP[key].h;
+      sensorSource = 'lookup';
+      break;
+    }
+  }
+  // fallback: derive from FocalPlaneXResolution
+  if (!sensorW && meta.FocalPlaneXResolution && imgW) {
+    const unit = meta.FocalPlaneResolutionUnit; // 2 = inches, 3 = cm
+    let mmPerUnit = unit === 3 ? 10 : 25.4; // cm->mm or inch->mm
+    sensorW = (imgW / meta.FocalPlaneXResolution) * mmPerUnit;
+    if (meta.FocalPlaneYResolution && imgH) {
+      sensorH = (imgH / meta.FocalPlaneYResolution) * mmPerUnit;
+    }
+    sensorSource = 'derived';
+  }
+
+  let focalPx = null;
+  if (focalMM && sensorW && imgW) {
+    focalPx = (focalMM / sensorW) * imgW;
+  }
+
+  const lat = toDeg(meta.latitude, meta.GPSLatitudeRef);
+  const lon = toDeg(meta.longitude, meta.GPSLongitudeRef);
+  const gpsAlt = meta.GPSAltitude != null ? meta.GPSAltitude : null;
+
+  // DJI XMP fields (namespaced, exifr flattens most of them)
+  const relAlt = meta.RelativeAltitude != null ? parseFloat(meta.RelativeAltitude) : null;
+  const absAlt = meta.AbsoluteAltitude != null ? parseFloat(meta.AbsoluteAltitude) : null;
+  const gimbalYaw = meta.GimbalYawDegree != null ? parseFloat(meta.GimbalYawDegree) : null;
+  const gimbalPitch = meta.GimbalPitchDegree != null ? parseFloat(meta.GimbalPitchDegree) : null;
+  const gimbalRoll = meta.GimbalRollDegree != null ? parseFloat(meta.GimbalRollDegree) : null;
+  const flightYaw = meta.FlightYawDegree != null ? parseFloat(meta.FlightYawDegree) : null;
+  const rtkFlag = meta.RtkFlag != null ? meta.RtkFlag : (meta.RTKFlag != null ? meta.RTKFlag : null);
+
+  return {
+    file: file.name,
+    make, model, combinedModel,
+    imgW, imgH,
+    focalMM, focal35,
+    sensorW, sensorH, sensorSource,
+    focalPx,
+    lat, lon, gpsAlt,
+    relAlt, absAlt,
+    gimbalYaw, gimbalPitch, gimbalRoll, flightYaw,
+    rtkFlag,
+    fNumber: meta.FNumber || null,
+    iso: meta.ISO || null,
+    dateTaken: meta.DateTimeOriginal || meta.CreateDate || null,
+    error: null,
+    raw: meta
+  };
+}
+
+function populateCameraFilter() {
+  const sel = document.getElementById('cameraFilter');
+  sel.innerHTML = '<option value="">All cameras</option>';
+  const models = [...new Set(records.map(r => r.combinedModel).filter(Boolean))];
+  models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    sel.appendChild(opt);
+  });
+}
+
+function stats(arr) {
+  const nums = arr.filter(v => typeof v === 'number' && !isNaN(v));
+  if (!nums.length) return null;
+  const sum = nums.reduce((a,b) => a+b, 0);
+  return { avg: sum / nums.length, min: Math.min(...nums), max: Math.max(...nums) };
+}
+
+function statLine(s, decimals) {
+  if (!s) return '—';
+  const f = n => n.toFixed(decimals);
+  if (s.min === s.max) return f(s.avg);
+  return `${f(s.avg)} <span class="muted" style="font-size:0.7em;">(${f(s.min)}–${f(s.max)})</span>`;
+}
+
+function toDateObj(d) {
+  if (!d) return null;
+  if (d instanceof Date && !isNaN(d)) return d;
+  const parsed = new Date(d);
+  return isNaN(parsed) ? null : parsed;
+}
+
+function formatTime(d) {
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatDuration(ms) {
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}m ${s}s`;
+}
+
+function renderSummary() {
+  const valid = records.filter(r => !r.error);
+  const cameras = [...new Set(valid.map(r => r.combinedModel).filter(Boolean))];
+  const focals = [...new Set(valid.map(r => r.focalMM).filter(Boolean))];
+  const resolutions = [...new Set(valid.map(r => r.imgW && r.imgH ? `${r.imgW}x${r.imgH}` : null).filter(Boolean))];
+  const errors = records.filter(r => r.error).length;
+
+  const focalStats = stats(valid.map(r => r.focalMM));
+  const isoStats = stats(valid.map(r => r.iso));
+  const fStats = stats(valid.map(r => r.fNumber));
+
+  const dates = valid.map(r => toDateObj(r.dateTaken)).filter(Boolean).sort((a,b) => a-b);
+  const heroEl = document.getElementById('flightTimeHero');
+  if (dates.length) {
+    const start = dates[0], end = dates[dates.length-1];
+    const sameDay = start.toDateString() === end.toDateString();
+    const rangeStr = sameDay
+      ? `${formatTime(start)} – ${formatTime(end)}`
+      : `${start.toLocaleString()} – ${end.toLocaleString()}`;
+    heroEl.innerHTML = `<div class="flight-time-hero">
+      <span class="ft-label">Flight time</span>
+      <span class="ft-range">${rangeStr}</span>
+      <span class="ft-duration">(${formatDuration(end-start)})</span>
+    </div>`;
+  } else {
+    heroEl.innerHTML = '';
+  }
+
+  const folderLabel = document.getElementById('folderLabel');
+  folderLabel.textContent = flightPlan && flightPlan.folderName ? `Folder: ${flightPlan.folderName}` : '';
+
+  const summaryRow = document.getElementById('summaryRow');
+  let planCard = '';
+  if (flightPlan && (flightPlan.frontOverlap || flightPlan.sideOverlap || flightPlan.agl)) {
+    const parts = [];
+    if (flightPlan.frontOverlap) parts.push(`${flightPlan.frontOverlap}% front`);
+    if (flightPlan.sideOverlap) parts.push(`${flightPlan.sideOverlap}% side`);
+    if (flightPlan.agl) parts.push(`${flightPlan.agl}m AGL`);
+    planCard = `<div class="stat"><div class="label">Planned overlap (from folder name)</div><div class="value good" style="font-size:1rem;">${parts.join(' / ')}</div></div>`;
+  }
+  summaryRow.innerHTML = `
+    ${planCard}
+    <div class="stat"><div class="label">Photos</div><div class="value">${records.length}</div></div>
+    <div class="stat"><div class="label">Focal length (mm)</div><div class="value" style="font-size:1rem;">${statLine(focalStats, 2)}</div></div>
+    <div class="stat"><div class="label">ISO</div><div class="value" style="font-size:1rem;">${statLine(isoStats, 0)}</div></div>
+    <div class="stat"><div class="label">f/ (aperture)</div><div class="value" style="font-size:1rem;">${statLine(fStats, 1)}</div></div>
+    <div class="stat"><div class="label">Parse errors</div><div class="value ${errors?'warn':''}">${errors}</div></div>
+  `;
+
+  const banner = document.getElementById('flagBanner');
+  const issues = [];
+  if (cameras.length > 1) issues.push(`${cameras.length} different camera models in this set (${cameras.join(', ')})`);
+  if (focals.length > 1) issues.push(`Mixed focal lengths: ${focals.join('mm, ')}mm — check for accidental zoom/lens changes between flights`);
+  if (resolutions.length > 1) issues.push(`Mixed image resolutions: ${resolutions.join(' | ')}`);
+  if (errors) issues.push(`${errors} file(s) had no readable metadata`);
+
+  banner.innerHTML = issues.length ? `<div><strong>⚠ Consistency check:</strong> ${issues.join('. ')}. Mixed intrinsics across a dataset will hurt bundle adjustment quality in Metashape/RealityCapture — consider processing as separate chunks/camera groups.</div>` : '';
+  if (!issues.length) banner.style.display = 'none'; else banner.style.display = 'flex';
+}
+
+const COLUMNS = [
+  {key:'file', label:'File'},
+  {key:'combinedModel', label:'Camera'},
+  {key:'imgW', label:'Width'},
+  {key:'imgH', label:'Height'},
+  {key:'focalMM', label:'Focal (mm)'},
+  {key:'focal35', label:'35mm equiv'},
+  {key:'fNumber', label:'f/'},
+  {key:'iso', label:'ISO'},
+  {key:'lat', label:'Lat'},
+  {key:'lon', label:'Lon'},
+  {key:'gpsAlt', label:'GPS Alt (m)'},
+  {key:'relAlt', label:'Rel Alt (m)'},
+  {key:'gimbalYaw', label:'Gimbal Yaw'},
+  {key:'gimbalPitch', label:'Gimbal Pitch'},
+  {key:'rtkFlag', label:'RTK'},
+  {key:'dateTaken', label:'Date'},
+];
+
+function renderTable() {
+  const head = document.getElementById('tableHead');
+  head.innerHTML = COLUMNS.map(c => `<th onclick="sortBy('${c.key}')">${c.label}${sortState.key===c.key ? (sortState.dir>0?' ▲':' ▼') : ''}</th>`).join('');
+
+  const search = document.getElementById('searchBox').value.toLowerCase();
+  const camFilter = document.getElementById('cameraFilter').value;
+
+  let rows = records.filter(r => {
+    if (camFilter && r.combinedModel !== camFilter) return false;
+    if (search && !(r.file.toLowerCase().includes(search) || (r.combinedModel||'').toLowerCase().includes(search))) return false;
+    return true;
+  });
+
+  rows.sort((a,b) => {
+    const av = a[sortState.key], bv = b[sortState.key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av-bv)*sortState.dir;
+    return String(av).localeCompare(String(bv)) * sortState.dir;
+  });
+
+  const modeFocal = mode(records.map(r=>r.focalMM).filter(Boolean));
+  const modeRes = mode(records.map(r=> r.imgW && r.imgH ? `${r.imgW}x${r.imgH}` : null).filter(Boolean));
+
+  const body = document.getElementById('tableBody');
+  body.innerHTML = rows.map(r => {
+    if (r.error) {
+      return `<tr><td class="filename">${r.file}</td><td colspan="${COLUMNS.length-1}" class="muted">${r.error}</td></tr>`;
+    }
+    const resStr = r.imgW && r.imgH ? `${r.imgW}x${r.imgH}` : null;
+    const mismatch = (modeFocal && r.focalMM && r.focalMM !== modeFocal) || (modeRes && resStr && resStr !== modeRes);
+    const rtkClass = r.rtkFlag ? (String(r.rtkFlag).toLowerCase().includes('fix') || r.rtkFlag==='RTK' ? 'rtk-fixed' : 'rtk-other') : '';
+    return `<tr class="${mismatch?'mismatch':''}">
+      <td class="filename">${r.file}</td>
+      <td>${r.combinedModel || '<span class="muted">—</span>'}</td>
+      <td>${r.imgW ?? ''}</td>
+      <td>${r.imgH ?? ''}</td>
+      <td>${r.focalMM ?? ''}</td>
+      <td>${r.focal35 ?? ''}</td>
+      <td>${r.fNumber ?? ''}</td>
+      <td>${r.iso ?? ''}</td>
+      <td>${r.lat != null ? r.lat.toFixed(6) : ''}</td>
+      <td>${r.lon != null ? r.lon.toFixed(6) : ''}</td>
+      <td>${r.gpsAlt != null ? r.gpsAlt.toFixed(1) : ''}</td>
+      <td>${r.relAlt != null ? r.relAlt.toFixed(1) : ''}</td>
+      <td>${r.gimbalYaw != null ? r.gimbalYaw.toFixed(1) : ''}</td>
+      <td>${r.gimbalPitch != null ? r.gimbalPitch.toFixed(1) : ''}</td>
+      <td>${r.rtkFlag ? `<span class="pill ${rtkClass}">${r.rtkFlag}</span>` : ''}</td>
+      <td class="muted">${r.dateTaken ? formatDate(r.dateTaken) : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function formatDate(d) {
+  try {
+    const date = d instanceof Date ? d : new Date(d);
+    return date.toLocaleString();
+  } catch { return String(d); }
+}
+
+function mode(arr) {
+  if (!arr.length) return null;
+  const counts = {};
+  arr.forEach(v => counts[v] = (counts[v]||0)+1);
+  const topKey = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+  const numeric = arr.find(v => String(v) === topKey && typeof v === 'number');
+  return numeric !== undefined ? numeric : topKey;
+}
+
+function sortBy(key) {
+  if (sortState.key === key) sortState.dir *= -1;
+  else { sortState.key = key; sortState.dir = 1; }
+  renderTable();
+}
+
+function exportCSV() {
+  const lines = [];
+  if (flightPlan && (flightPlan.folderName || flightPlan.frontOverlap)) {
+    if (flightPlan.folderName) lines.push(`# Folder: ${flightPlan.folderName}`);
+    if (flightPlan.frontOverlap || flightPlan.sideOverlap || flightPlan.agl) {
+      lines.push(`# Planned overlap: ${flightPlan.frontOverlap||'?'}% front / ${flightPlan.sideOverlap||'?'}% side / ${flightPlan.agl||'?'}m AGL`);
+    }
+  }
+  const headers = COLUMNS.map(c => c.label);
+  lines.push(headers.join(','));
+  records.forEach(r => {
+    const row = COLUMNS.map(c => {
+      let v = r[c.key];
+      if (v == null) return '';
+      if (typeof v === 'number') return v;
+      return `"${String(v).replace(/"/g,'""')}"`;
+    });
+    lines.push(row.join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'photo_intrinsics.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearAll() {
+  records = [];
+  flightPlan = null;
+  fileInput.value = '';
+  folderInput.value = '';
+  resultsState.style.display = 'none';
+  emptyState.style.display = 'block';
+  document.getElementById('exportBtn').disabled = true;
+  document.getElementById('clearBtn').disabled = true;
+}
+</script>
+
+</body>
+</html>
